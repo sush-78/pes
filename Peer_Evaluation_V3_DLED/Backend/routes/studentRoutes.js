@@ -15,6 +15,8 @@ import {
   requestEnrollment,
   submitEvaluation,
   uploadExamDocument,
+  getPeersForExam,
+  createManualEvaluation,
 } from "../controllers/studentController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import upload from "../utils/fileUpload.js";
@@ -41,5 +43,7 @@ router.get("/results-batches", protect, getResultsBatches);
 router.get("/result-batch-exams/:batchId", protect, getResultsBatchExams);
 router.get("/peer-result-evals/:examId", protect, getPeerResultsEvaluations);
 router.put("/raise-ticket/:evaluationId", protect, raiseTicket);
+router.get("/peers/:examId", protect, getPeersForExam);
+router.post("/evaluations/manual", protect, createManualEvaluation);
 
 export default router;

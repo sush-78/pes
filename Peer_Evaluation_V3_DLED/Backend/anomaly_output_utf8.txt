@@ -1,0 +1,14 @@
+﻿--- Evaluation Breakdown ---
+
+Student: Student 1 (Average: 74.8)
+  - Evaluator: Student 2 | Score: 80 | Dev from others: 7.0 | Status: Normal
+  - Evaluator: Student 3 | Score: 84 | Dev from others: 12.3 | Status: Normal
+  - Evaluator: Student 4 | Score: 60 | Dev from others: 19.7 | Status: Needs Review
+  - Evaluator: Student 5 | Score: 75 | Dev from others: 0.3 | Status: Normal
+
+Student: Student 5 (Average: 75.0)
+  - Evaluator: Student 4 | Score: 75 | Dev from others: 0.0 | Status: Normal
+
+Student: Student 2 (Average: 59.0)
+  - Evaluator: Student 5 | Score: 59 | Dev from others: 0.0 | Status: Normal
+

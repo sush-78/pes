@@ -9,6 +9,7 @@ import { PeerEvaluation } from '../models/PeerEvaluation.js';
 import { TA } from '../models/TA.js';
 import { Ticket } from '../models/Ticket.js';
 import fs from 'fs';
+import mongoose from 'mongoose';
 
 export const getStudentDashboardStats = async (req, res) => {
   try {
@@ -319,15 +320,13 @@ export const getEvaluationsByBatchAndExam = async (req, res) => {
     const { examId } = req.query;
     const studentId = req.user._id;
 
-    const query = { evaluator: studentId, eval_status: 'pending' };
+    const query = { evaluator: studentId };
     if (examId) query.exam = examId;
 
     const evaluations = await PeerEvaluation.find(query)
-      .populate({
-        path: 'exam',
-        match: { flags: false }
-      })
+      .populate('exam')
       .populate('document')
+      .populate('student', 'name');
     
     const batchCourseMap = {};
 
@@ -346,6 +345,8 @@ export const getEvaluationsByBatchAndExam = async (req, res) => {
 
     const formattedEvaluations = evaluations.map(evaluation => {
       const exam = evaluation.exam;
+      if (!exam) return null; // Skip if exam population failed
+      
       const document = evaluation.document;
 
       return {
@@ -360,17 +361,21 @@ export const getEvaluationsByBatchAndExam = async (req, res) => {
         exam_solutions: exam.solutions,
         batchId: batchCourseMap[exam._id]?.batchId,
         courseName: batchCourseMap[exam._id]?.courseName,
-        documentId: document._id,
-        documentUniqueId: document.uniqueId,
-        documentPath: document.documentPath,
-        documentUploadedOn: document.uploadedOn,
+        documentId: document?._id,
+        documentUniqueId: document?.uniqueId,
+        documentPath: document?.documentPath,
+        documentUploadedOn: document?.uploadedOn,
         feedback: evaluation.feedback,
         score: evaluation.score,
         ticket: evaluation.ticket,
         deadline: evaluation.deadline,
         status: evaluation.eval_status,
+        validationStatus: evaluation.status,
+        deviation: evaluation.deviation,
+        peerAverage: evaluation.peerAverage || 0,
+        peerName: evaluation.student?.name || "Unknown Peer"
       };
-    });
+    }).filter(e => e !== null);
 
     res.status(200).json(formattedEvaluations);
   } catch (error) {
@@ -401,23 +406,52 @@ export const submitEvaluation = async (req, res) => {
       return res.status(400).json({ message: `Total marks (${totalMarks}) exceed the allowed maximum (${exam.totalMarks}).` });
     }
 
-    const evaluation = await PeerEvaluation.findById({
-      _id: evaluationId,
-    });
+    const evaluation = await PeerEvaluation.findById(evaluationId);
 
     if (!evaluation) {
       return res.status(404).json({ message: "Evaluation not found!" });
     }
+
+    // --- Deviation-Based Anomaly Detection ---
+    // Fetch all existing completed evaluations for the same submission (document)
+    const existingEvaluations = await PeerEvaluation.find({
+      document: evaluation.document,
+      eval_status: 'completed',
+      _id: { $ne: evaluationId } 
+    });
+
+    let status = "Normal";
+    let deviation = 0;
+
+    if (existingEvaluations.length > 0) {
+      // Calculate average total marks of all previous evaluations
+      const totalPreviousMarks = existingEvaluations.reduce((acc, evalDoc) => {
+        const evalTotal = evalDoc.score.reduce((sum, m) => sum + m, 0);
+        return acc + evalTotal;
+      }, 0);
+      
+      const avgScore = totalPreviousMarks / existingEvaluations.length;
+      deviation = Math.abs(totalMarks - avgScore);
+
+      // Rule: Set threshold = 15 marks
+      if (deviation > 15) {
+        status = "Needs Review";
+      }
+    }
+    // --- End Anomaly Detection ---
 
     evaluation.score = marks;
     evaluation.feedback = feedback;
     evaluation.evaluated_on = new Date();
     evaluation.eval_status = 'completed';
     evaluation.evaluated_by = req.user._id;
+    evaluation.status = status;
+    evaluation.deviation = deviation;
+    evaluation.peerAverage = avgScore || totalMarks; // If first eval, avg is current score
 
     await evaluation.save();
 
-    res.status(200).json({ message: "Evaluation submitted successfully!" });
+    res.status(200).json({ message: "Evaluation submitted successfully!", status, deviation });
   } catch (error) {
     res.status(500).json({ message: "Failed to submit evaluation!" });
   }
@@ -547,5 +581,118 @@ export const raiseTicket = async (req, res) => {
     res.status(200).json({ message: 'Ticket raised successfully!' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to raise ticket.' });
+  }
+};
+
+export const getPeersForExam = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const studentId = req.user._id;
+
+    const exam = await Examination.findById(examId);
+    if (!exam) return res.status(404).json({ message: "Exam not found!" });
+
+    // 1. Get all students in the same batch
+    const enrollments = await Enrollment.find({
+      batch: exam.batch,
+      status: "active",
+      student: { $ne: studentId },
+    }).populate("student", "name email");
+
+    const batchStudentIds = enrollments.map((e) => e.student._id);
+
+    // 2. Get all students who have uploaded a document for this exam
+    const documents = await Document.find({
+      examId: examId,
+      uploadedBy: { $in: batchStudentIds },
+    });
+
+    const studentIdsWithDocs = documents.map((d) => d.uploadedBy.toString());
+
+    // 3. Get students already evaluated by the current student for this exam
+    const existingEvaluations = await PeerEvaluation.find({
+      evaluator: studentId,
+      exam: examId,
+    });
+
+    const evaluatedStudentIds = existingEvaluations.map((ev) =>
+      ev.student.toString()
+    );
+
+    // 4. Filter eligible peers: Have Doc + Not Evaluated Yet
+    const peers = enrollments
+      .filter((e) => {
+        const sId = e.student._id.toString();
+        return studentIdsWithDocs.includes(sId) && !evaluatedStudentIds.includes(sId);
+      })
+      .map((e) => ({
+        _id: e.student._id,
+        name: e.student.name,
+        email: e.student.email,
+        documentId: documents.find(d => d.uploadedBy.toString() === e.student._id.toString())?._id
+      }));
+
+    res.json(peers);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch peers!" });
+  }
+};
+
+export const createManualEvaluation = async (req, res) => {
+  try {
+    const { examId, peerId } = req.body;
+    const studentId = req.user._id;
+
+    if (studentId.toString() === peerId) {
+      return res.status(400).json({ message: "You cannot evaluate yourself!" });
+    }
+
+    // 1. Check if the evaluator has already evaluated 2 peers for this exam
+    const evaluationCount = await PeerEvaluation.countDocuments({
+      evaluator: studentId,
+      exam: examId,
+    });
+
+    if (evaluationCount >= 2) {
+      return res.status(400).json({ message: "You have reached the maximum limit of 2 evaluations for this exam!" });
+    }
+
+    // 2. Check if an evaluation already exists for this pair
+    const existingEval = await PeerEvaluation.findOne({
+      evaluator: studentId,
+      exam: examId,
+      student: peerId,
+    });
+
+    if (existingEval) {
+      return res.status(400).json({ message: "You have already started or completed an evaluation for this peer!" });
+    }
+
+    // 3. Get the peer's document
+    const document = await Document.findOne({
+      examId: examId,
+      uploadedBy: peerId,
+    });
+
+    if (!document) {
+      return res.status(404).json({ message: "This peer has not submitted their work yet!" });
+    }
+
+    // 4. Create the evaluation
+    const newEvaluation = new PeerEvaluation({
+      evaluator: studentId,
+      student: peerId,
+      exam: examId,
+      document: document._id,
+      uid: new mongoose.Types.ObjectId(), // PlaceHolder or link to actual UID if needed
+      eval_status: "pending",
+    });
+
+    await newEvaluation.save();
+
+    res.status(201).json({ message: "Evaluation initialized successfully!", evaluationId: newEvaluation._id });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to create evaluation!" });
   }
 };

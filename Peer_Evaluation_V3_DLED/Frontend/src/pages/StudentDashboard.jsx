@@ -53,6 +53,7 @@ export default function StudentDashboard() {
   const fileInputRefs = useRef({});
   const [examHistoryOverlayOpen, setExamHistoryOverlayOpen] = useState(false);
   const [completedExams, setCompletedExams] = useState([]);
+  const [eligiblePeers, setEligiblePeers] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -161,7 +162,16 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (activeTab !== 'evaluation') return;
     fetchEvaluations();
+    fetchEvaluationExams();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'evaluation' && selectedExam) {
+      fetchPeersForExam(selectedExam);
+    } else {
+      setEligiblePeers([]);
+    }
+  }, [activeTab, selectedExam]);
 
   useEffect(() => {
     if (activeTab === 'result') {
@@ -240,23 +250,79 @@ export default function StudentDashboard() {
 
       if (Array.isArray(data)) {
         setEvaluations(data);
-
-        const uniqueExams = data.reduce((acc, evaluation) => {
-          if (!acc.some(exam => exam.examId === evaluation.examId)) {
-            acc.push({ examId: evaluation.examId, name: evaluation.examName, courseName: evaluation.courseName, batchName: evaluation.batchId });
-          }
-          return acc;
-        }, []);
-
-        setEvaluationExams(uniqueExams);
       } else {
         setEvaluations([]);
-        setEvaluationExams([]);
       }
     } catch (error) {
       console.error('Failed to fetch evaluations:', error);
       setEvaluations([]);
-      setEvaluationExams([]);
+    }
+  };
+
+  const fetchEvaluationExams = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch('http://localhost:5000/api/student/all-exams', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        // Filter exams that are in evaluation phase
+        const evalExams = data.filter(exam => exam.evaluations_sent).map(exam => ({
+          examId: exam._id,
+          name: exam.name,
+          courseName: exam.courseName || 'Course', // These might need population or adjustment
+          batchName: exam.batchId || 'Batch'
+        }));
+        setEvaluationExams(evalExams);
+      }
+    } catch (error) {
+      console.error('Failed to fetch evaluation exams:', error);
+    }
+  };
+
+  const fetchPeersForExam = async (examId) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch(`http://localhost:5000/api/student/peers/${examId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setEligiblePeers(data);
+      } else {
+        setEligiblePeers([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch peers:', error);
+      setEligiblePeers([]);
+    }
+  };
+
+  const handlePeerSelect = async (examId, peerId) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch('http://localhost:5000/api/student/evaluations/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ examId, peerId }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        showMessage(data.message, 'success');
+        fetchEvaluations(); // Refresh list to show the new pending evaluation
+        fetchPeersForExam(examId); // Refresh peers list
+      } else {
+        showMessage(data.message, 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to initialize evaluation', 'error');
     }
   };
 
@@ -944,6 +1010,8 @@ export default function StudentDashboard() {
                 handleEvaluateClick={handleEvaluateClick}
                 closeEvalOverlay={closeEvalOverlay}
                 handleEvaluationSubmit={handleEvaluationSubmit}
+                eligiblePeers={eligiblePeers}
+                handlePeerSelect={handlePeerSelect}
               />
             </div>
           )}

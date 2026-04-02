@@ -12,6 +12,8 @@ const EvaluationsTable = ({
   handleEvaluateClick,
   closeEvalOverlay,
   handleEvaluationSubmit,
+  eligiblePeers = [],
+  handlePeerSelect,
 }) => {
 
   return (
@@ -60,6 +62,39 @@ const EvaluationsTable = ({
             </option>
           ))}
         </select>
+
+        {selectedExam && eligiblePeers.length > 0 && (
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                handlePeerSelect(selectedExam, e.target.value);
+                e.target.value = ""; // Reset dropdown
+              }
+            }}
+            style={{
+              width: "auto",
+              maxWidth: "100%",
+              minWidth: 180,
+              padding: "0.6rem 1.2rem",
+              borderRadius: "8px",
+              border: "1.5px solid #28a745",
+              fontSize: "1rem",
+              background: "#fff",
+              color: "#000",
+              fontWeight: 500,
+              transition: "background 0.2s",
+              outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            <option value="">Select Peer to Evaluate</option>
+            {eligiblePeers.map((peer) => (
+              <option key={peer._id} value={peer._id}>
+                {peer.name} ({peer.email})
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Evaluations Table */}
@@ -87,7 +122,10 @@ const EvaluationsTable = ({
             <th style={{ padding: "12px", textAlign: "center" }}>Exam Name</th>
             <th style={{ padding: "12px", textAlign: "center" }}>Exam Date</th>
             <th style={{ padding: "12px", textAlign: "center" }}>Exam Time</th>
+            <th style={{ padding: "12px", textAlign: "center" }}>Evaluated Peer</th>
+            <th style={{ padding: "12px", textAlign: "center" }}>Peer Average</th>
             <th style={{ padding: "12px", textAlign: "center" }}>Status</th>
+            <th style={{ padding: "12px", textAlign: "center" }}>Validation</th>
           </tr>
         </thead>
         <tbody>
@@ -169,6 +207,24 @@ const EvaluationsTable = ({
                       fontWeight: 500,
                     }}
                   >
+                    {evaluation.peerName || "N/A"}
+                  </td>
+                  <td
+                    style={{
+                      padding: "12px",
+                      textAlign: "center",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {evaluation.peerAverage ? evaluation.peerAverage.toFixed(1) : "N/A"}
+                  </td>
+                  <td
+                    style={{
+                      padding: "12px",
+                      textAlign: "center",
+                      fontWeight: 500,
+                    }}
+                  >
                     {evaluation.status === "pending" ? (
                       <button
                         onClick={() => handleEvaluateClick(evaluation)}
@@ -186,7 +242,34 @@ const EvaluationsTable = ({
                         Evaluate
                       </button>
                     ) : (
-                      <span style={{ color: "green" }}>Evaluated</span>
+                      <span style={{ color: "#28a745", fontWeight: "bold" }}>Evaluated</span>
+                    )}
+                  </td>
+                  <td
+                    style={{
+                      padding: "12px",
+                      textAlign: "center",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {evaluation.status === "completed" ? (
+                      <span 
+                        title={`Avg Peer Score: ${evaluation.peerAverage?.toFixed(1) || 0} | Deviation: ${evaluation.deviation?.toFixed(1) || 0}`}
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: evaluation.validationStatus === "Needs Review" ? "rgba(211, 47, 47, 0.1)" : "rgba(46, 125, 50, 0.1)",
+                          color: evaluation.validationStatus === "Needs Review" ? "#d32f2f" : "#2e7d32",
+                          display: "inline-block",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {evaluation.validationStatus === "Needs Review" ? "⚠️ Needs Review" : "✅ Normal"}
+                      </span>
+                    ) : (
+                      <span style={{ color: "gray", fontSize: "0.85rem" }}>-</span>
                     )}
                   </td>
                 </tr>

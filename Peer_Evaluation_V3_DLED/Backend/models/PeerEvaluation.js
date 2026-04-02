@@ -36,6 +36,13 @@ const PeerEvaluationSchema = new mongoose.Schema({
     default: "pending",
   },
   evaluated_by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  status: {
+    type: String,
+    enum: ["Normal", "Needs Review"],
+    default: "Normal",
+  },
+  deviation: { type: Number, default: 0 },
+  peerAverage: { type: Number, default: 0 },
 });
 
 export const PeerEvaluation = mongoose.model(

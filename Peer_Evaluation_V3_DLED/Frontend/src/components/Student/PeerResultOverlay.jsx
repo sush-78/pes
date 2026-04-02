@@ -207,6 +207,9 @@ const PeerResultOverlay = ({
                     Status
                   </th>
                   <th style={{ ...thCellStyle }}>
+                    Validation
+                  </th>
+                  <th style={{ ...thCellStyle }}>
                     Total Score
                   </th>
                   <th style={{ ...thCellStyle }}>
@@ -217,7 +220,7 @@ const PeerResultOverlay = ({
               <tbody>
                 {peerResultsForExam.length === 0 ? (
                   <tr>
-                    <td colSpan="4" style={{
+                    <td colSpan="7" style={{
                       padding: "20px 12px",
                       textAlign: "center",
                       fontWeight: 500,
@@ -261,6 +264,23 @@ const PeerResultOverlay = ({
                           color: (result.eval_status === 'completed') ? ' #155724' : ' #721c24',
                         }}>
                           {(result.eval_status || 'pending').charAt(0).toUpperCase() + (result.eval_status || 'pending').slice(1)}
+                        </span>
+                      </td>
+                      <td style={{ ...tdCellStyle }}>
+                        <span 
+                          title={result.status === "Needs Review" ? `Deviation from average: ${result.deviation?.toFixed(1) || 0}` : "Deviation within acceptable range"}
+                          style={{
+                            fontSize: "0.85rem",
+                            fontWeight: 700,
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: result.status === "Needs Review" ? "rgba(211, 47, 47, 0.1)" : "rgba(46, 125, 50, 0.1)",
+                            color: result.status === "Needs Review" ? "#d32f2f" : "#2e7d32",
+                            display: "inline-block",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          {result.status === "Needs Review" ? "⚠️ Needs Review" : "✅ Normal"}
                         </span>
                       </td>
                       <td style={{ ...tdCellStyle }}>

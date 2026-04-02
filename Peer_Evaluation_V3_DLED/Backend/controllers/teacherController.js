@@ -968,12 +968,12 @@ export const getFlaggedEvaluationsForExam = async (req, res) => {
   const { examId } = req.params;
 
   try {
-    const flaggedEvaluations = await PeerEvaluation.find({
+    const evaluations = await PeerEvaluation.find({
       exam: examId,
-      ticket: 2
+      eval_status: 'completed'
     }).populate('exam student evaluator document');
 
-    res.status(200).json(flaggedEvaluations);
+    res.status(200).json(evaluations);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch flagged evaluations!' });
   }
@@ -1176,9 +1176,16 @@ export const getResultsAnalytics = async (req, res) => {
 
     let completed = 0, pending = 0, flagged = 0;
     evaluations.forEach(ev => {
-      if (ev.eval_status === "completed" && ev.ticket === 0) completed += 1;
-      else if (ev.eval_status === "pending" && ev.ticket === 0) pending += 1;
-      if (ev.ticket === 1 || ev.ticket === 2) flagged += 1;
+      if (ev.eval_status === "completed" && ev.ticket === 0) {
+        completed += 1;
+      } else if (ev.eval_status === "pending" && ev.ticket === 0) {
+        pending += 1;
+      }
+      
+      // Count as flagged if it has a ticket OR it's an automatic anomaly
+      if (ev.ticket === 1 || ev.ticket === 2 || ev.status === "Needs Review") {
+        flagged += 1;
+      }
     });
     const evalStatus = { completed, pending, flagged };
 

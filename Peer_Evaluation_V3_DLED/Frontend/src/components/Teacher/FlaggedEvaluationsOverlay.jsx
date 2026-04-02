@@ -51,7 +51,7 @@ export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, 
         >
           Close
         </button>
-        <h2 style={{ marginBottom: "1.5rem", color: "#4b3c70" }}>Flagged Evaluations</h2>
+        <h2 style={{ marginBottom: "1.5rem", color: "#4b3c70", textAlign: "center" }}>All Peer Evaluations</h2>
         <div style={{ overflowX: "auto" }}>
           <table style={{
             width: "100%",
@@ -70,19 +70,27 @@ export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, 
                 <th style={{ ...thCellStyle }}>Total Score</th>
                 <th style={{ ...thCellStyle }}>Document</th>
                 <th style={{ ...thCellStyle }}>Status</th>
+                <th style={{ ...thCellStyle }}>Validation</th>
                 <th style={{ ...thCellStyle }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {flaggedEvaluations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "gray" }}>
-                    No flagged evaluations found.
+                  <td colSpan={7} style={{ padding: "24px", textAlign: "center", color: "gray" }}>
+                    No evaluations found.
                   </td>
                 </tr>
               ) : (
                 flaggedEvaluations.map((evaluation, idx) => (
-                  <tr key={evaluation._id || idx} style={{ borderBottom: "1px solid #eee" }}>
+                  <tr 
+                    key={evaluation._id || idx} 
+                    style={{ 
+                      borderBottom: "1px solid #eee",
+                      backgroundColor: evaluation.status === "Needs Review" ? "#fff5f5" : "#fafffa",
+                      transition: "background 0.2s"
+                    }}
+                  >
                     <td style={{ ...tdCellStyle }}>{evaluation.student?.name || "Unknown"}</td>
                     <td style={{ ...tdCellStyle }}>{evaluation.evaluator?.name || "Unknown"}</td>
                     <td style={{ ...tdCellStyle }}>
@@ -104,6 +112,17 @@ export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, 
                     </td>
                     <td style={{ ...tdCellStyle, fontWeight: "bold", color: evaluation.eval_status === "pending" ? "#d32f2f" : "#43a047" }}>
                       {evaluation.eval_status.charAt(0).toUpperCase() + evaluation.eval_status.slice(1)}
+                    </td>
+                    <td style={{ ...tdCellStyle }}>
+                      <span 
+                        title={`Deviation from average: ${evaluation.deviation?.toFixed(1) || 0}`}
+                        style={{
+                          fontSize: "1rem",
+                          color: evaluation.status === "Needs Review" ? "#d32f2f" : "#2e7d32"
+                        }}
+                      >
+                        {evaluation.status === "Needs Review" ? "⚠️ Needs Review" : "✅ Normal"}
+                      </span>
                     </td>
                     <td style={{ ...tdCellStyle }}>
                       <div style={{ display: "flex", gap: "0.3rem", justifyContent: "center" }}>
