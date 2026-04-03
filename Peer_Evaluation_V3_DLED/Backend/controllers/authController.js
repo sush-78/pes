@@ -407,13 +407,14 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-  console.log(`Login attempt for email: ${email}`);
+  const { email, password, role } = req.body;
+  console.log(`Login attempt for email: ${email}, role: ${role}`);
 
   try {
     const user = await User.findOne({ email: email.trim().toLowerCase() });
     
     if (!user) {
+      // ... same logic for pending registration ...
       const pendingRegistration = await VerificationCode.findOne({ email });
       if (pendingRegistration) {
         return res.status(400).json({ 
@@ -423,6 +424,10 @@ export const loginUser = async (req, res) => {
         });
       }
       return res.status(400).json({ message: 'User not found.' });
+    }
+
+    if (user.role !== role) {
+      return res.status(400).json({ message: `Access denied. You are registered as ${user.role}, not ${role}.` });
     }
 
     if (!user.isVerified) {

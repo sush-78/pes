@@ -10,6 +10,7 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [role, setRole] = useState('student');
     const navigate = useNavigate();
 
     const handleLogin = async (e) => {
@@ -20,7 +21,7 @@ export default function Login() {
             const response = await fetch('http://localhost:5000/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email, password, role }),
             });
 
             const data = await response.json();
@@ -65,6 +66,20 @@ export default function Login() {
                     Please sign in to your account
                 </p>
                 <form onSubmit={handleLogin} className="login-form">
+                    <div className="login-form-group">
+                        <label htmlFor="role" className="login-label">Login as</label>
+                        <select
+                            id="role"
+                            value={role}
+                            onChange={(e) => setRole(e.target.value)}
+                            className="login-input"
+                            required
+                        >
+                            <option value="student">Student</option>
+                            <option value="teacher">Teacher</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
                     <div className="login-form-group">
                         <label htmlFor="email" className="login-label">Email</label>
                         <input
