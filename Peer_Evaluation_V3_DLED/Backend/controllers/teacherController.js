@@ -981,23 +981,47 @@ export const getFlaggedEvaluationsForExam = async (req, res) => {
 
 export const updateEvaluation = async (req, res) => {
   const { evaluationId } = req.params;
-  const updateData = req.body;
+  const { score, feedback } = req.body;
 
   try {
-    const updatedFields = {
-      ...updateData,
-      evaluated_on: new Date(),
-      evaluated_by: req.user._id,
-    };
-    
-    const updatedEvaluation = await PeerEvaluation.findByIdAndUpdate(evaluationId, updatedFields, { new: true });
+    const evaluation = await PeerEvaluation.findById(evaluationId);
 
-    if (!updatedEvaluation) {
+    if (!evaluation) {
       return res.status(404).json({ message: 'Evaluation not found!' });
     }
 
-    res.status(200).json({message: 'Evaluation updated/resolved successfully!'});
+    // 1. Recalculate total marks from the new scores array
+    const newTotalMarks = Array.isArray(score) 
+      ? score.reduce((a, b) => Number(a) + Number(b), 0) 
+      : Number(score);
+
+    // 2. Use stored peerAverage (the baseline for this evaluation's anomaly detection)
+    const baseline = evaluation.peerAverage || newTotalMarks;
+    const newDeviation = Math.abs(newTotalMarks - baseline);
+
+    // 3. Apply threshold (15 marks)
+    let newStatus = 'Needs Review';
+    if (newDeviation <= 15) {
+      newStatus = 'Approved'; // Manual teacher adjustment that falls within normal range
+    }
+
+    // 4. Update and save
+    evaluation.score = score;
+    evaluation.feedback = feedback;
+    evaluation.status = newStatus;
+    evaluation.deviation = newDeviation;
+    evaluation.evaluated_on = new Date();
+    evaluation.evaluated_by = req.user._id;
+
+    await evaluation.save();
+
+    res.status(200).json({ 
+      message: 'Evaluation updated and recalculated successfully!', 
+      status: newStatus,
+      deviation: newDeviation 
+    });
   } catch (error) {
+    console.error('Update Evaluation Error:', error);
     res.status(500).json({ message: 'Failed to update evaluation!' });
   }
 };
@@ -1021,6 +1045,81 @@ export const removeTicket = async (req, res) => {
   }
 };
 
+export const moderateEvaluation = async (req, res) => {
+  const { evaluationId } = req.params;
+  const { action } = req.body; // 'approve' or 'reject'
+
+  try {
+    const evaluation = await PeerEvaluation.findById(evaluationId);
+    
+    if (!evaluation) {
+      return res.status(404).json({ message: 'Evaluation not found!' });
+    }
+
+    if (action === 'approve') {
+      evaluation.status = 'Normal';
+      evaluation.ticket = 0;
+      evaluation.isRejected = false;
+    } else if (action === 'reject') {
+      evaluation.isRejected = true;
+    } else {
+      return res.status(400).json({ message: 'Invalid moderation action specified.' });
+    }
+
+    await evaluation.save();
+    res.status(200).json({ 
+      message: `Evaluation ${action}d successfully!`,
+      evaluation 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to moderate evaluation!' });
+  }
+};
+
+export const reEvaluateByTeacher = async (req, res) => {
+  const { examId, studentId, score, feedback } = req.body;
+  const teacherId = req.user._id;
+
+  try {
+    // 1. Find a reference evaluation to get the correct document and UID
+    const refEval = await PeerEvaluation.findOne({ exam: examId, student: studentId });
+    if (!refEval) {
+      return res.status(404).json({ message: "No existing evaluation found for this student to re-evaluate." });
+    }
+
+    // 2. Create the teacher's separate evaluation document
+    const teacherEval = new PeerEvaluation({
+      evaluator: teacherId,
+      evaluatorRole: "teacher",
+      student: studentId,
+      exam: examId,
+      document: refEval.document,
+      uid: refEval.uid,
+      score,
+      feedback,
+      eval_status: "completed",
+      isFinal: true,
+      status: "Finalized by Teacher"
+    });
+
+    await teacherEval.save();
+
+    // 3. Update status of all other evaluations for this student/exam so UI reflects the final status
+    await PeerEvaluation.updateMany(
+      { exam: examId, student: studentId, _id: { $ne: teacherEval._id } },
+      { $set: { status: "Finalized by Teacher" } }
+    );
+
+    res.status(201).json({ 
+      message: "Teacher re-evaluation completed and finalized!", 
+      evaluationId: teacherEval._id 
+    });
+  } catch (error) {
+    console.error("Teacher Re-Evaluation Error:", error);
+    res.status(500).json({ message: "Failed to finalize teacher re-evaluation." });
+  }
+};
+
 export const downloadResultsCSV = async (req, res) => {
   const { examId } = req.params;
 
@@ -1030,29 +1129,45 @@ export const downloadResultsCSV = async (req, res) => {
       return res.status(404).json({ message: 'Exam not found!' });
     }
 
-    const evaluations = await PeerEvaluation.find({ exam: examId, eval_status: 'completed' }).populate('student');
+    const evaluations = await PeerEvaluation.find({ 
+      exam: examId, 
+      eval_status: 'completed',
+      isRejected: { $ne: true }
+    }).populate('student');
+
+    const groupedByStudent = {};
+    evaluations.forEach(ev => {
+      const sid = ev.student?._id?.toString();
+      if (!sid) return;
+      if (!groupedByStudent[sid]) groupedByStudent[sid] = [];
+      groupedByStudent[sid].push(ev);
+    });
 
     const studentTotals = {};
-    evaluations.forEach(ev => {
-      const studentId = ev.student?._id?.toString();
-      if (!studentId) return;
+    for (const sid in groupedByStudent) {
+      const evs = groupedByStudent[sid];
+      // Rule: If a teacher evaluation exists (isFinal), use ONLY that. Otherwise, use all peers.
+      const finalEval = evs.find(e => e.isFinal);
+      const targets = finalEval ? [finalEval] : evs;
 
-      let totalMarks = 0;
-      if (Array.isArray(ev.score)) {
-        totalMarks = ev.score.reduce((a, b) => a + b, 0);
-      } else if (typeof ev.score === 'number') {
-        totalMarks = ev.score;
-      }
+      targets.forEach(ev => {
+        let totalMarks = 0;
+        if (Array.isArray(ev.score)) {
+          totalMarks = ev.score.reduce((a, b) => a + b, 0);
+        } else if (typeof ev.score === 'number') {
+          totalMarks = ev.score;
+        }
 
-      if (!studentTotals[studentId]) {
-        studentTotals[studentId] = {
-          name: ev.student.name,
-          email: ev.student.email,
-          totals: [],
-        };
-      }
-      studentTotals[studentId].totals.push(totalMarks);
-    });
+        if (!studentTotals[sid]) {
+          studentTotals[sid] = {
+            name: ev.student.name,
+            email: ev.student.email,
+            totals: [],
+          };
+        }
+        studentTotals[sid].totals.push(totalMarks);
+      });
+    }
 
     const csvData = Object.values(studentTotals).map(entry => ({
       Name: entry.name,
@@ -1079,7 +1194,10 @@ export const getResultsAnalytics = async (req, res) => {
       return res.status(404).json({ message: 'Exam not found!' });
     }
 
-    const evaluations = await PeerEvaluation.find({ exam: examId }).populate('student');
+    const evaluations = await PeerEvaluation.find({ 
+      exam: examId,
+      isRejected: { $ne: true }
+    }).populate('student');
     
     const totalEnrolled = await Enrollment.countDocuments({ 
       batch: exam.batch, 
@@ -1088,22 +1206,34 @@ export const getResultsAnalytics = async (req, res) => {
     
     const totalSubmissions = await Document.countDocuments({ examId });
 
-    const studentTotals = {};
+    const groupedByStudent = {};
     evaluations.forEach(ev => {
-      const studentId = ev.student?._id?.toString();
-      if (!studentId) return;
-      let totalMarks = 0;
-      if (Array.isArray(ev.score)) totalMarks = ev.score.reduce((a, b) => a + b, 0);
-      else if (typeof ev.score === 'number') totalMarks = ev.score;
-      if (!studentTotals[studentId]) {
-        studentTotals[studentId] = {
-          name: ev.student.name,
-          email: ev.student.email,
-          totals: [],
-        };
-      }
-      studentTotals[studentId].totals.push(totalMarks);
+      const sid = ev.student?._id?.toString();
+      if (!sid) return;
+      if (!groupedByStudent[sid]) groupedByStudent[sid] = [];
+      groupedByStudent[sid].push(ev);
     });
+
+    const studentTotals = {};
+    for (const sid in groupedByStudent) {
+      const evs = groupedByStudent[sid];
+      const finalEval = evs.find(e => e.isFinal);
+      const targets = finalEval ? [finalEval] : evs;
+
+      targets.forEach(ev => {
+        let totalMarks = 0;
+        if (Array.isArray(ev.score)) totalMarks = ev.score.reduce((a, b) => a + b, 0);
+        else if (typeof ev.score === 'number') totalMarks = ev.score;
+        if (!studentTotals[sid]) {
+          studentTotals[sid] = {
+            name: ev.student.name,
+            email: ev.student.email,
+            totals: [],
+          };
+        }
+        studentTotals[sid].totals.push(totalMarks);
+      });
+    }
 
     const averages = Object.values(studentTotals).map(entry => ({
       name: entry.name,

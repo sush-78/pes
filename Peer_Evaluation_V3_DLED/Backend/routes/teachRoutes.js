@@ -17,9 +17,11 @@ import {
   getFlaggedEvaluationsForExam,
   getResultsAnalytics,
   getTeacherCoursesAndBatches,
+  moderateEvaluation,
   removeTicket,
   scheduleExam,
   sendEvaluation,
+  reEvaluateByTeacher,
   studentsEnroll,
   updateEvaluation,
   updateExam,
@@ -116,6 +118,12 @@ router.put(
   adminOrTeacherOnly,
   removeTicket
 );
+router.put(
+  "/moderate-evaluation/:evaluationId",
+  protect,
+  adminOrTeacherOnly,
+  moderateEvaluation
+);
 router.get(
   "/download-results-csv/:examId",
   protect,
@@ -133,6 +141,12 @@ router.get(
   protect,
   adminOrTeacherOnly,
   downloadIncentivesCSV
+);
+router.post(
+  "/re-evaluate-teacher",
+  protect,
+  adminOrTeacherOnly,
+  reEvaluateByTeacher
 );
 
 export default router;

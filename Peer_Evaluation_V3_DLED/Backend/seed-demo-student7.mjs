@@ -4,8 +4,9 @@ import { Enrollment } from './models/Enrollment.js';
 import { Examination } from './models/Examination.js';
 import { Document } from './models/Document.js';
 import { PeerEvaluation } from './models/PeerEvaluation.js';
-import { Batch } from './models/Batch.js';
 import { Course } from './models/Course.js';
+import { Batch } from './models/Batch.js';
+import './models/UIDMap.js'; // Ensure UIDMap is registered for PeerEvaluation
 import bcrypt from 'bcryptjs';
 
 async function seedStudent7() {
@@ -61,11 +62,8 @@ async function seedStudent7() {
       doc = new Document({
         uploadedBy: student7._id,
         examId: exam._id,
-        filename: 'student7_submission.pdf',
-        originalName: 'Student7_Work.pdf',
-        path: 'uploads/student7_submission.pdf',
-        mimetype: 'application/pdf',
-        size: 1024
+        uniqueId: `student7_submission_${Date.now()}`,
+        documentPath: 'uploads/student7_submission.pdf'
       });
       await doc.save();
       console.log('Document uploaded for Student 7');
@@ -128,6 +126,7 @@ async function seedStudent7() {
 
     await mongoose.disconnect();
   } catch (err) {
+    import('fs').then(fs => fs.writeFileSync('err.json', JSON.stringify(err, Object.getOwnPropertyNames(err))));
     console.error(err);
     process.exit(1);
   }

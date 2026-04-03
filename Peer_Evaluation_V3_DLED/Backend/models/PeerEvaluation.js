@@ -6,6 +6,11 @@ const PeerEvaluationSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+  evaluatorRole: {
+    type: String,
+    enum: ["student", "teacher"],
+    default: "student",
+  },
   evaluated_on: { type: Date, default: Date.now },
   deadline: {
     type: Date,
@@ -38,11 +43,13 @@ const PeerEvaluationSchema = new mongoose.Schema({
   evaluated_by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   status: {
     type: String,
-    enum: ["Normal", "Needs Review"],
+    enum: ["Normal", "Needs Review", "Approved", "Finalized by Teacher"],
     default: "Normal",
   },
   deviation: { type: Number, default: 0 },
   peerAverage: { type: Number, default: 0 },
+  isRejected: { type: Boolean, default: false },
+  isFinal: { type: Boolean, default: false },
 });
 
 export const PeerEvaluation = mongoose.model(

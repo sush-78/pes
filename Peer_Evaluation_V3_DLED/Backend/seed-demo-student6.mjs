@@ -4,8 +4,8 @@ import { Enrollment } from './models/Enrollment.js';
 import { Examination } from './models/Examination.js';
 import { Document } from './models/Document.js';
 import { PeerEvaluation } from './models/PeerEvaluation.js';
-import { Batch } from './models/Batch.js';
 import { Course } from './models/Course.js';
+import { Batch } from './models/Batch.js';
 import bcrypt from 'bcryptjs';
 
 async function seedStudent6() {
@@ -13,8 +13,8 @@ async function seedStudent6() {
     await mongoose.connect('mongodb://localhost:27017/pes');
     console.log('Connected to MongoDB');
 
-    // 2. Get Exam (Anomaly Test)
-    const exam = await Examination.findOne({ name: 'Anomaly Test - Multiple Students' });
+    // 2. Get Exam (Assessment)
+    const exam = await Examination.findOne({ name: 'Assessment' });
     if (!exam) {
       console.error('Exam not found');
       return;
@@ -61,11 +61,8 @@ async function seedStudent6() {
       doc = new Document({
         uploadedBy: student6._id,
         examId: exam._id,
-        filename: 'student6_submission.pdf',
-        originalName: 'Student6_Work.pdf',
-        path: 'uploads/student6_submission.pdf',
-        mimetype: 'application/pdf',
-        size: 1024
+        uniqueId: 'ST6-' + Date.now(),
+        documentPath: 'uploads/student6_submission.pdf'
       });
       await doc.save();
       console.log('Document uploaded for Student 6');

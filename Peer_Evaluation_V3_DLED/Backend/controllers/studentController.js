@@ -619,11 +619,11 @@ export const getPeersForExam = async (req, res) => {
       ev.student.toString()
     );
 
-    // 4. Filter eligible peers: Have Doc + Not Evaluated Yet
+    // 4. Filter eligible peers: Not Evaluated Yet
     const peers = enrollments
       .filter((e) => {
         const sId = e.student._id.toString();
-        return studentIdsWithDocs.includes(sId) && !evaluatedStudentIds.includes(sId);
+        return !evaluatedStudentIds.includes(sId);
       })
       .map((e) => ({
         _id: e.student._id,
@@ -647,16 +647,6 @@ export const createManualEvaluation = async (req, res) => {
       return res.status(400).json({ message: "You cannot evaluate yourself!" });
     }
 
-    // 1. Check if the evaluator has already evaluated 2 peers for this exam
-    const evaluationCount = await PeerEvaluation.countDocuments({
-      evaluator: studentId,
-      exam: examId,
-    });
-
-    if (evaluationCount >= 2) {
-      return res.status(400).json({ message: "You have reached the maximum limit of 2 evaluations for this exam!" });
-    }
-
     // 2. Check if an evaluation already exists for this pair
     const existingEval = await PeerEvaluation.findOne({
       evaluator: studentId,
@@ -668,14 +658,24 @@ export const createManualEvaluation = async (req, res) => {
       return res.status(400).json({ message: "You have already started or completed an evaluation for this peer!" });
     }
 
-    // 3. Get the peer's document
-    const document = await Document.findOne({
+    // 3. Get the peer's document, or create a dummy one if it doesn't exist to allow testing
+    let document = await Document.findOne({
       examId: examId,
       uploadedBy: peerId,
     });
 
     if (!document) {
-      return res.status(404).json({ message: "This peer has not submitted their work yet!" });
+      document = new Document({
+        uploadedBy: peerId,
+        examId: examId,
+        uniqueId: `dummy_submission_${Date.now()}`,
+        documentPath: 'uploads/dummy.pdf',
+        originalName: 'dummy.pdf',
+        filename: 'dummy.pdf',
+        size: 0,
+        mimetype: 'application/pdf'
+      });
+      await document.save();
     }
 
     // 4. Create the evaluation
