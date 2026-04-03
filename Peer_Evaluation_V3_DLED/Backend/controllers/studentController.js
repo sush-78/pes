@@ -422,6 +422,7 @@ export const submitEvaluation = async (req, res) => {
 
     let status = "Normal";
     let deviation = 0;
+    let avgScore = totalMarks;
 
     if (existingEvaluations.length > 0) {
       // Calculate average total marks of all previous evaluations
@@ -430,7 +431,7 @@ export const submitEvaluation = async (req, res) => {
         return acc + evalTotal;
       }, 0);
       
-      const avgScore = totalPreviousMarks / existingEvaluations.length;
+      avgScore = totalPreviousMarks / existingEvaluations.length;
       deviation = Math.abs(totalMarks - avgScore);
 
       // Rule: Set threshold = 15 marks
@@ -447,12 +448,13 @@ export const submitEvaluation = async (req, res) => {
     evaluation.evaluated_by = req.user._id;
     evaluation.status = status;
     evaluation.deviation = deviation;
-    evaluation.peerAverage = avgScore || totalMarks; // If first eval, avg is current score
+    evaluation.peerAverage = avgScore; // avgScore is now always defined
 
     await evaluation.save();
 
     res.status(200).json({ message: "Evaluation submitted successfully!", status, deviation });
   } catch (error) {
+    console.error("Evaluation Submission Error:", error);
     res.status(500).json({ message: "Failed to submit evaluation!" });
   }
 };
