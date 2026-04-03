@@ -1,7 +1,6 @@
-import React from "react";
-import { FaTimes, FaEdit } from "react-icons/fa";
+import { FaTimes, FaEdit, FaCheck, FaTrash, FaUserShield } from "react-icons/fa";
 
-export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, flaggedEvaluationsOverlayClose, flaggedEvaluations, handleEditEvaluationOverlayOpen, handleEvaluationFlagRemove }) {
+export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, flaggedEvaluationsOverlayClose, flaggedEvaluations, handleEditEvaluationOverlayOpen, handleEvaluationFlagRemove, handleModerateAction, handleReEvaluateClick }) {
   if (!flaggedEvaluationsOverlayOpen) return null;
 
   return (
@@ -71,6 +70,7 @@ export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, 
                 <th style={{ ...thCellStyle }}>Document</th>
                 <th style={{ ...thCellStyle }}>Status</th>
                 <th style={{ ...thCellStyle }}>Validation</th>
+                <th style={{ ...thCellStyle }}>Anomaly Details</th>
                 <th style={{ ...thCellStyle }}>Actions</th>
               </tr>
             </thead>
@@ -121,17 +121,65 @@ export default function PeerEvaluationsOverlay({ flaggedEvaluationsOverlayOpen, 
                           color: evaluation.status === "Needs Review" ? "#d32f2f" : "#2e7d32"
                         }}
                       >
-                        {evaluation.status === "Needs Review" ? "⚠️ Needs Review" : "✅ Normal"}
+                        {evaluation.status === "Needs Review" ? "⚠️ Needs Review" : (evaluation.status === "Approved" || evaluation.status === "Finalized by Teacher") ? `✅ ${evaluation.status}` : "✅ Normal"}
                       </span>
                     </td>
                     <td style={{ ...tdCellStyle }}>
-                      <div style={{ display: "flex", gap: "0.3rem", justifyContent: "center" }}>
-                        <button style={btnAccept} onClick={() => handleEditEvaluationOverlayOpen(evaluation)}>
-                          <FaEdit />
-                        </button>
-                        <button style={btnDecline} onClick={() => handleEvaluationFlagRemove(evaluation._id, evaluation.exam?._id)}>
-                          <FaTimes />
-                        </button>
+                      {evaluation.status === "Needs Review" ? (
+                        <div style={{ fontSize: "0.85rem", color: "#666", textAlign: "left", paddingLeft: "10px" }}>
+                          <div style={{ marginBottom: '2px' }}>
+                            <strong>Evaluator Marks:</strong> {
+                              Array.isArray(evaluation.score) 
+                                ? evaluation.score.reduce((a, b) => a + b, 0) 
+                                : evaluation.score || 0
+                            }
+                          </div>
+                          <div style={{ marginBottom: '2px' }}>
+                            <strong>Peer Average:</strong> {evaluation.peerAverage?.toFixed(2) || "N/A"}
+                          </div>
+                          <div style={{ color: "#d32f2f", fontWeight: "bold" }}>
+                            <strong>Deviation:</strong> {evaluation.deviation?.toFixed(2) || 0}
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: "#2e7d32", fontSize: "0.9rem" }}>Within normal range</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdCellStyle }}>
+                      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+                        {evaluation.status === "Needs Review" && !evaluation.isRejected ? (
+                          <>
+                            <button 
+                              style={{ ...btnBase, backgroundColor: "#28a745" }} 
+                              onClick={() => handleModerateAction(evaluation._id, evaluation.exam?._id, 'approve')}
+                              title="Approve (Mark as Normal)"
+                            >
+                              <FaCheck style={{ marginRight: '4px' }} /> Approve
+                            </button>
+                            <button 
+                              style={{ ...btnBase, backgroundColor: "#4b3c70" }}
+                              onClick={() => handleReEvaluateClick(evaluation)}
+                              title="Re-Evaluate (Overwrite with Teacher Marks)"
+                            >
+                              <FaUserShield style={{ marginRight: '4px' }} /> Re-Evaluate
+                            </button>
+                            <button 
+                              style={{ ...btnBase, backgroundColor: "#dc3545" }} 
+                              onClick={() => handleModerateAction(evaluation._id, evaluation.exam?._id, 'reject')}
+                              title="Reject (Discard Score)"
+                            >
+                              <FaTrash style={{ marginRight: '4px' }} /> Reject
+                            </button>
+                          </>
+                        ) : evaluation.isRejected ? (
+                          <span style={{ color: "#dc3545", fontWeight: "bold" }}>Rejected</span>
+                        ) : evaluation.status === "Finalized by Teacher" ? (
+                          <span style={{ color: "#4b3c70", fontWeight: "bold" }}>Finalized</span>
+                        ) : (
+                          <button style={btnAccept} onClick={() => handleEditEvaluationOverlayOpen(evaluation)}>
+                            <FaEdit /> Edit
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -159,20 +207,25 @@ const tdCellStyle = {
     color: "#4b3c70"
 };
 
-const btnAccept = {
-  padding: "4px 8px",
-  borderRadius: "4px",
+const btnBase = {
+  padding: "6px 12px",
+  borderRadius: "6px",
   border: "none",
-  backgroundColor: "#4caf50",
   color: "#fff",
   cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  fontSize: "0.85rem",
+  fontWeight: "bold",
+  transition: "opacity 0.2s",
+};
+
+const btnAccept = {
+  ...btnBase,
+  backgroundColor: "#4b3c70",
 };
 
 const btnDecline = {
-  padding: "4px 8px",
-  borderRadius: "4px",
-  border: "none",
+  ...btnBase,
   backgroundColor: "#fc1717",
-  color: "#fff",
-  cursor: "pointer",
 };

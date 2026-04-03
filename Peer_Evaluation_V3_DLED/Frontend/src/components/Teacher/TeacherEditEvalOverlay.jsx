@@ -7,6 +7,8 @@ const TeacherEditEvalOverlay = ({
   selectedEvaluation,
   closeEditOverlay,
   handleEvaluationUpdate,
+  isReEvaluateMode,
+  handleTeacherReEvaluationSubmit,
 }) => {
   const [formData, setFormData] = useState({
     scores: [],
@@ -47,15 +49,24 @@ const TeacherEditEvalOverlay = ({
       return;
     }
 
-    const updateData = {
-      evaluationId: selectedEvaluation._id,
-      exam: selectedEvaluation.exam._id,
-      score: formData.scores,
-      feedback: formData.feedbacks,
-      ticket: 0,
-    };
-
-    handleEvaluationUpdate(updateData);
+    if (isReEvaluateMode) {
+      const reEvalData = {
+        examId: selectedEvaluation.exam._id,
+        studentId: selectedEvaluation.student._id,
+        score: formData.scores,
+        feedback: formData.feedbacks,
+      };
+      handleTeacherReEvaluationSubmit(reEvalData);
+    } else {
+      const updateData = {
+        evaluationId: selectedEvaluation._id,
+        exam: selectedEvaluation.exam._id,
+        score: formData.scores,
+        feedback: formData.feedbacks,
+        ticket: 0,
+      };
+      handleEvaluationUpdate(updateData);
+    }
   };
 
   if (!isEditOverlayOpen || !selectedEvaluation) return null;
@@ -142,7 +153,7 @@ const TeacherEditEvalOverlay = ({
               }}
             >
               <h2 style={{ textAlign: "center", flex: 1, margin: 0 }}>
-                Edit Evaluation
+                {isReEvaluateMode ? "Teacher Re-Evaluation" : "Edit Evaluation"}
               </h2>
               <div style={{ display: "flex", gap: "1rem" }}>
                 <a
@@ -302,7 +313,7 @@ const TeacherEditEvalOverlay = ({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    Update Evaluation
+                    {isReEvaluateMode ? "Finalize Teacher Evaluation" : "Update Evaluation"}
                   </button>
                 </div>
 

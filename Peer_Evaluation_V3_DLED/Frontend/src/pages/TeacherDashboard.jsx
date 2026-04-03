@@ -45,6 +45,7 @@ export default function TeacherDashboard() {
   const [selectedEvaluation, setSelectedEvaluation] = useState(null);
   const [resultsOverlayOpen, setResultsOverlayOpen] = useState(false);
   const [selectedExamForResults, setSelectedExamForResults] = useState(null);
+  const [isReEvaluateMode, setIsReEvaluateMode] = useState(false);
   const { setRefreshApp } = useContext(AppContext);
 
   useEffect(() => {
@@ -618,6 +619,13 @@ export default function TeacherDashboard() {
   const handleEditEvaluationOverlayClose = () => {
     setEditEvaluationOverlayOpen(false);
     setSelectedEvaluation(null);
+    setIsReEvaluateMode(false);
+  };
+
+  const handleReEvaluateClick = (evaluation) => {
+    setSelectedEvaluation(evaluation);
+    setIsReEvaluateMode(true);
+    setEditEvaluationOverlayOpen(true);
   };
 
   const handleEvaluationUpdate = async (updateData) => {
@@ -650,6 +658,35 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleTeacherReEvaluationSubmit = async (reEvalData) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/teacher/re-evaluate-teacher`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          examId: reEvalData.examId,
+          studentId: reEvalData.studentId,
+          score: reEvalData.score,
+          feedback: reEvalData.feedback,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        showMessage(data.message, 'success');
+        handleEditEvaluationOverlayClose();
+        handleViewEvaluations(reEvalData.examId);
+      } else {
+        showMessage(data.message || 'Failed to finalize re-evaluation.', 'error');
+      }
+    } catch (error) {
+      showMessage(error.message || 'An error occurred during re-evaluation!', 'error');
+    }
+  };
+
   const handleEvaluationFlagRemove = async (evaluation, examId) => {
     try {
       const token = localStorage.getItem('token');
@@ -670,6 +707,30 @@ export default function TeacherDashboard() {
       }
     } catch (error) {
       showMessage('An error occurred while removing flag from evaluation.', 'error');
+    }
+  };
+
+  const handleModerateAction = async (evaluationId, examId, action) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/teacher/moderate-evaluation/${evaluationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showMessage(data.message, 'success');
+        handleViewEvaluations(examId); // Refresh the list
+      } else {
+        showMessage(data.message || `Failed to ${action} evaluation.`, 'error');
+      }
+    } catch (error) {
+      showMessage(`An error occurred while ${action}ing evaluation.`, 'error');
     }
   };
 
@@ -1316,6 +1377,8 @@ export default function TeacherDashboard() {
           flaggedEvaluations={flaggedEvaluationsForOverlay}
           handleEditEvaluationOverlayOpen={handleEditEvaluationOverlayOpen}
           handleEvaluationFlagRemove={handleEvaluationFlagRemove}
+          handleModerateAction={handleModerateAction}
+          handleReEvaluateClick={handleReEvaluateClick}
         />
       )}
 
@@ -1325,6 +1388,8 @@ export default function TeacherDashboard() {
           selectedEvaluation={selectedEvaluation}
           closeEditOverlay={handleEditEvaluationOverlayClose}
           handleEvaluationUpdate={handleEvaluationUpdate}
+          isReEvaluateMode={isReEvaluateMode}
+          handleTeacherReEvaluationSubmit={handleTeacherReEvaluationSubmit}
         />
       )}
 
