@@ -408,9 +408,10 @@ export const registerUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
+  console.log(`Login attempt for email: ${email}`);
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
     
     if (!user) {
       const pendingRegistration = await VerificationCode.findOne({ email });
